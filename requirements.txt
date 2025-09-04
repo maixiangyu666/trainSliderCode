@@ -1,0 +1,30 @@
+# YOLOv5滑块验证码识别项目依赖
+# 注意：假设torch已通过conda安装
+
+# 图像处理核心
+Pillow>=8.0.0
+opencv-python>=4.5.0
+numpy>=1.19.0
+pandas>=1.3.0
+
+# YOLOv5相关 (会自动处理torch依赖)
+ultralytics
+matplotlib>=3.3.0
+seaborn>=0.11.0
+PyYAML>=5.3.1
+requests>=2.23.0
+scipy>=1.4.1
+tqdm>=4.64.0
+
+# API服务
+fastapi>=0.68.0
+uvicorn[standard]>=0.15.0
+python-multipart>=0.0.5
+
+# 可选：开发工具
+# jupyter
+# ipywidgets
+
+# 如果torch未安装，取消下面注释:
+# torch>=1.8.0
+# torchvision>=0.9.0

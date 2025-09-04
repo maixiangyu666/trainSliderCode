@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  slider-captcha-api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./yolov5:/app/yolov5
+      - ./models:/app/models
+    environment:
+      - MODEL_PATH=/app/yolov5/runs/train/slider_captcha/weights/best.pt
+    restart: unless-stopped
+    
+  # 可选：添加nginx反向代理
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - slider-captcha-api
+    restart: unless-stopped
+    profiles:
+      - production
