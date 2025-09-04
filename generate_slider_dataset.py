@@ -48,7 +48,7 @@ class SliderCaptchaGenerator:
 
     def create_slider_shape(self, size):
         """
-        创建滑块形状 (拼图形状)
+        创建滑块形状 (真实拼图形状)
         
         Args:
             size: (width, height) 滑块尺寸
@@ -60,30 +60,85 @@ class SliderCaptchaGenerator:
         mask = Image.new('L', size, 0)  # 黑色背景
         draw = ImageDraw.Draw(mask)
         
-        # 基础矩形
-        base_rect = [5, 5, width-5, height-5]
+        # 基础矩形 (稍微缩小边距)
+        margin = 3
+        base_rect = [margin, margin, width-margin, height-margin]
         draw.rectangle(base_rect, fill=255)
         
-        # 添加拼图凸起/凹陷
-        bump_size = min(width, height) // 4
+        # 计算凸起/凹陷的尺寸
+        bump_size = min(width, height) // 5  # 稍微小一点
+        half_bump = bump_size // 2
         
-        # 右侧凸起
-        if random.choice([True, False]):
-            bump_x = width - 5
-            bump_y = height // 2 - bump_size // 2
-            draw.ellipse([bump_x-bump_size//2, bump_y, 
-                         bump_x+bump_size//2, bump_y+bump_size], fill=255)
+        # 四个方向随机添加凸起或凹陷
+        directions = ['top', 'right', 'bottom', 'left']
+        random.shuffle(directions)  # 随机顺序
         
-        # 上方凸起/凹陷
-        if random.choice([True, False]):
-            bump_x = width // 2 - bump_size // 2
-            bump_y = 5
-            if random.choice([True, False]):  # 凸起
-                draw.ellipse([bump_x, bump_y-bump_size//2,
-                             bump_x+bump_size, bump_y+bump_size//2], fill=255)
-            else:  # 凹陷
-                draw.ellipse([bump_x, bump_y-bump_size//2,
-                             bump_x+bump_size, bump_y+bump_size//2], fill=0)
+        # 每个方向有70%概率添加凸起/凹陷
+        for direction in directions[:random.randint(1, 3)]:  # 1-3个方向有凸起/凹陷
+            if random.random() < 0.7:  # 70%概率
+                is_bump = random.choice([True, False])  # 随机凸起或凹陷
+                
+                if direction == 'top':
+                    # 上方凸起/凹陷
+                    center_x = width // 2 + random.randint(-width//6, width//6)
+                    center_y = margin
+                    ellipse_coords = [
+                        center_x - half_bump, center_y - half_bump,
+                        center_x + half_bump, center_y + half_bump
+                    ]
+                    
+                elif direction == 'right':
+                    # 右侧凸起/凹陷
+                    center_x = width - margin
+                    center_y = height // 2 + random.randint(-height//6, height//6)
+                    ellipse_coords = [
+                        center_x - half_bump, center_y - half_bump,
+                        center_x + half_bump, center_y + half_bump
+                    ]
+                    
+                elif direction == 'bottom':
+                    # 下方凸起/凹陷
+                    center_x = width // 2 + random.randint(-width//6, width//6)
+                    center_y = height - margin
+                    ellipse_coords = [
+                        center_x - half_bump, center_y - half_bump,
+                        center_x + half_bump, center_y + half_bump
+                    ]
+                    
+                else:  # left
+                    # 左侧凸起/凹陷
+                    center_x = margin
+                    center_y = height // 2 + random.randint(-height//6, height//6)
+                    ellipse_coords = [
+                        center_x - half_bump, center_y - half_bump,
+                        center_x + half_bump, center_y + half_bump
+                    ]
+                
+                # 绘制凸起或凹陷
+                if is_bump:
+                    # 凸起：在基础矩形外扩展
+                    draw.ellipse(ellipse_coords, fill=255)
+                else:
+                    # 凹陷：在基础矩形内挖空
+                    draw.ellipse(ellipse_coords, fill=0)
+        
+        # 添加一些随机的小凸起/凹陷增加复杂度
+        for _ in range(random.randint(0, 2)):  # 0-2个额外的小特征
+            small_bump = bump_size // 3
+            x = random.randint(margin + small_bump, width - margin - small_bump)
+            y = random.randint(margin + small_bump, height - margin - small_bump)
+            
+            # 确保小特征在边缘附近
+            if (x < margin + small_bump * 2 or x > width - margin - small_bump * 2 or
+                y < margin + small_bump * 2 or y > height - margin - small_bump * 2):
+                
+                coords = [x - small_bump//2, y - small_bump//2,
+                         x + small_bump//2, y + small_bump//2]
+                
+                if random.choice([True, False]):
+                    draw.ellipse(coords, fill=255)  # 小凸起
+                else:
+                    draw.ellipse(coords, fill=0)    # 小凹陷
         
         return mask
 
@@ -107,29 +162,52 @@ class SliderCaptchaGenerator:
         slider_x = random.randint(50, max_x)  # 左边留出空间给滑动轨道
         slider_y = random.randint(10, max_y)
         
-        # 创建滑块形状
+        # 创建滑块形状mask
         slider_mask = self.create_slider_shape(slider_size)
         
         # 在背景图上创建缺口
         captcha_img = bg.copy()
         
-        # 将滑块区域变暗或模糊来模拟缺口
+        # 获取滑块区域
         slider_area = captcha_img.crop((slider_x, slider_y, 
                                        slider_x + slider_size[0], 
                                        slider_y + slider_size[1]))
         
-        # 创建缺口效果 - 降低亮度和增加边框
-        slider_area = slider_area.point(lambda p: p * 0.3)  # 变暗
-        slider_area = slider_area.filter(ImageFilter.GaussianBlur(1))  # 轻微模糊
+        # 使用mask创建真实的拼图形状缺口
+        # 将mask区域变暗并添加阴影效果
+        slider_area_array = np.array(slider_area)
+        mask_array = np.array(slider_mask)
+        
+        # 对mask区域应用缺口效果
+        for i in range(3):  # RGB三个通道
+            channel = slider_area_array[:, :, i]
+            # 在mask区域(白色=255)创建缺口效果
+            mask_effect = (mask_array == 255)
+            channel[mask_effect] = (channel[mask_effect] * 0.2).astype(np.uint8)  # 变暗
+            slider_area_array[:, :, i] = channel
+        
+        # 转换回PIL图像
+        processed_area = Image.fromarray(slider_area_array)
+        
+        # 添加模糊效果
+        processed_area = processed_area.filter(ImageFilter.GaussianBlur(0.8))
         
         # 将处理后的区域粘贴回去
-        captcha_img.paste(slider_area, (slider_x, slider_y))
+        captcha_img.paste(processed_area, (slider_x, slider_y))
         
-        # 绘制缺口边框
+        # 使用mask绘制精确的缺口边框
         draw = ImageDraw.Draw(captcha_img)
-        draw.rectangle([slider_x-1, slider_y-1, 
-                       slider_x + slider_size[0], slider_y + slider_size[1]], 
-                      outline=(100, 100, 100), width=2)
+        
+        # 创建边框效果 - 沿着mask的边缘
+        mask_with_border = slider_mask.filter(ImageFilter.FIND_EDGES)
+        
+        # 将边框应用到原图
+        for y in range(slider_mask.height):
+            for x in range(slider_mask.width):
+                if mask_with_border.getpixel((x, y)) > 100:  # 边缘像素
+                    img_x, img_y = slider_x + x, slider_y + y
+                    if 0 <= img_x < captcha_img.width and 0 <= img_y < captcha_img.height:
+                        draw.point((img_x, img_y), fill=(80, 80, 80))
         
         return captcha_img, slider_x, slider_y, slider_size[0], slider_size[1]
 
@@ -262,6 +340,45 @@ download: |
         print(f"✅ 创建配置文件: {yaml_path}")
         print("📋 数据集配置符合YOLOv5官方格式")
 
+    def preview_slider_shapes(self, count=5):
+        """预览生成的滑块形状"""
+        print("🎨 生成滑块形状预览...")
+        
+        preview_dir = Path("preview_shapes")
+        preview_dir.mkdir(exist_ok=True)
+        
+        for i in range(count):
+            # 随机选择尺寸
+            size = random.choice(self.slider_sizes)
+            
+            # 生成滑块形状
+            mask = self.create_slider_shape(size)
+            
+            # 创建预览图 - 白色背景上显示滑块形状
+            preview = Image.new('RGB', size, (240, 240, 240))
+            
+            # 将mask应用到预览图
+            mask_array = np.array(mask)
+            preview_array = np.array(preview)
+            
+            # 滑块区域显示为深色
+            slider_pixels = (mask_array == 255)
+            preview_array[slider_pixels] = [100, 150, 200]  # 蓝色滑块
+            
+            # 边框
+            border_mask = mask.filter(ImageFilter.FIND_EDGES)
+            border_array = np.array(border_mask)
+            border_pixels = (border_array > 100)
+            preview_array[border_pixels] = [50, 50, 50]  # 深色边框
+            
+            # 保存预览
+            preview_result = Image.fromarray(preview_array)
+            preview_path = preview_dir / f"slider_shape_{i+1}_{size[0]}x{size[1]}.png"
+            preview_result.save(preview_path)
+            
+        print(f"✅ 滑块形状预览保存到: {preview_dir}/")
+        print("💡 查看生成的滑块形状是否符合预期")
+
 
 def main():
     parser = argparse.ArgumentParser(description='滑块验证码数据集生成器')
@@ -273,6 +390,8 @@ def main():
                        help='训练集数量 (默认: 800)')
     parser.add_argument('--val-count', type=int, default=200,
                        help='验证集数量 (默认: 200)')
+    parser.add_argument('--preview-only', action='store_true',
+                       help='只生成滑块形状预览，不生成数据集')
     
     args = parser.parse_args()
     
@@ -284,10 +403,22 @@ def main():
         output_dir=args.output_dir
     )
     
-    generator.generate_dataset(
-        num_train=args.train_count,
-        num_val=args.val_count
-    )
+    if args.preview_only:
+        # 只生成预览
+        generator.preview_slider_shapes(count=10)
+        print("🎨 预览生成完成！请查看 preview_shapes/ 文件夹")
+        print("💡 如果形状满意，可以运行完整数据生成:")
+        print(f"   python {__file__} --train-count {args.train_count} --val-count {args.val_count}")
+    else:
+        # 先生成预览
+        print("🎨 生成滑块形状预览...")
+        generator.preview_slider_shapes(count=5)
+        
+        # 生成完整数据集
+        generator.generate_dataset(
+            num_train=args.train_count,
+            num_val=args.val_count
+        )
 
 
 if __name__ == "__main__":
